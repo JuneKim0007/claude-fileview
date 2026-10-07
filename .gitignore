@@ -1,0 +1,5 @@
+__pycache__/
+*.pyc
+default.yaml
+*.partial
+.DS_Store

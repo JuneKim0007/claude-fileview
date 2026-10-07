@@ -1,0 +1,15 @@
+#!/usr/bin/env -S python3 -E -s
+"""fileview launcher: puts the package on sys.path (following symlinks) and runs the CLI.
+`hook` skips argparse: it runs on every tool call, so its import cost is paid constantly."""
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
+
+if sys.argv[1:2] == ["hook"]:
+    from fileview.capture.hook_entry import run  # noqa: E402
+    raise SystemExit(run())
+
+from fileview.cli import main  # noqa: E402
+
+raise SystemExit(main())
