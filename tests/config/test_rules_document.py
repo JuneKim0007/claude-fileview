@@ -80,6 +80,25 @@ class Rejections(unittest.TestCase):
     def test_prefix_needs_a_label(self):
         self.check({"prefixes": [{"path": "~/x"}]}, "missing_field", "prefixes[0].label")
 
+    def test_template_placeholder_must_be_known(self):
+        self.check({"captures": [{"name": "push", "command": "git push", "output": "(?P<new>[0-9a-f]+)"}],
+                    "announce": [{"match": {}, "text": "{push.neww}"}]}, "unknown_placeholder", "announce[0].text")
+
+    def test_template_colour_must_resolve(self):
+        self.check({"display": [{"match": {}, "text": "<chartreuse>x</>"}]}, "unknown_colour", "display[0].text")
+
+    def test_match_kind_must_exist(self):
+        self.check({"ignore": {"match": [{"kinds": ["INVOK"]}]}}, "unknown_kind", "ignore.match[0].kinds[0]")
+
+    def test_capture_names_are_unique(self):
+        self.check({"captures": [{"name": "a", "command": "x"}, {"name": "a", "command": "y"}]},
+                   "duplicate_name", "captures[1].name")
+
+    def test_capture_fields_feed_templates(self):
+        rules = parse({"captures": [{"name": "push", "command": "git push", "output": "(?P<new>[0-9a-f]+)"}],
+                       "announce": [{"match": {"kinds": ["DONE"]}, "text": "<yellow>pushed</> {push.new}"}]})
+        self.assertEqual(rules.announce[0].match.kinds, ("DONE",))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -4,8 +4,8 @@ records and recycled pids are never trusted (or signalled). The group is for sto
 window's processes; the pid is for action signals, which must reach the viewer and nothing else."""
 import os
 import re
-import subprocess
 
+from fileview.lifecycle import processes
 from fileview.locations import CLAUDE_HOME, ENTRY_SCRIPT, STATE_DIR, VIEWERS_DIR
 
 _DEFAULT_STATE = str(CLAUDE_HOME / "fileview-state")    # viewers started without --state belong here
@@ -36,9 +36,14 @@ def forget(session: str) -> None:
     (VIEWERS_DIR / f"{session}.pgid").unlink(missing_ok=True)
 
 
+def forget_all() -> None:
+    for record_file in VIEWERS_DIR.glob("*.pgid"):
+        record_file.unlink(missing_ok=True)
+
+
 def live_group(session: str) -> int | None:
     ids = _recorded_ids(session)
-    if ids and any(viewer_session(args) == session for args in _group_args(ids[0])):
+    if ids and any(viewer_session(args) == session for args in processes.args_in_group(ids[0])):
         return ids[0]
     if ids is not None:          # a record whose group no longer runs this viewer is stale
         forget(session)
@@ -50,30 +55,16 @@ def live_pid(session: str) -> int | None:
     ids = _recorded_ids(session)
     if not ids or len(ids) < 2:
         return None
-    args = _ps("-o", "args=", "-p", str(ids[1]))
-    return ids[1] if args and viewer_session(args[0].strip()) == session else None
-
-
-def process_args(pid: int) -> str:
-    lines = _ps("-o", "args=", "-p", str(pid))
-    return lines[0].strip() if lines else ""
-
-
-def _recorded_ids(session: str) -> list[int] | None:
-    try:
-        return [int(part) for part in (VIEWERS_DIR / f"{session}.pgid").read_text().split()]
-    except (FileNotFoundError, ValueError):
-        return None
+    return ids[1] if viewer_session(processes.args_of(ids[1])) == session else None
 
 
 def all_viewer_groups() -> dict[int, str]:
     """Every running viewer's process group -> session, found by scanning processes, not records."""
     found = {}
-    for line in _ps("-axo", "pgid=,args="):
-        group, _, args = line.strip().partition(" ")
-        session = viewer_session(args.strip())
-        if session and group.isdigit():
-            found[int(group)] = session
+    for group, args in processes.all_groups_and_args():
+        session = viewer_session(args)
+        if session:
+            found[group] = session
     return found
 
 
@@ -81,10 +72,8 @@ def recorded_sessions() -> list[str]:
     return sorted(p.stem for p in VIEWERS_DIR.glob("*.pgid")) if VIEWERS_DIR.exists() else []
 
 
-def _group_args(group: int) -> list[str]:
-    return [line.strip() for line in _ps("-o", "args=", "-g", str(group))]
-
-
-def _ps(*args: str) -> list[str]:
-    result = subprocess.run(["ps", *args], capture_output=True, text=True)
-    return result.stdout.splitlines()
+def _recorded_ids(session: str) -> list[int] | None:
+    try:
+        return [int(part) for part in (VIEWERS_DIR / f"{session}.pgid").read_text().split()]
+    except (FileNotFoundError, ValueError):
+        return None

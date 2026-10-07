@@ -7,6 +7,7 @@ CLAUDE_HOME = HOME / ".claude"
 STATE_DIR = Path(os.environ.get("CLAUDE_FILEVIEW_STATE", CLAUDE_HOME / "fileview-state"))
 VIEWERS_DIR = STATE_DIR / "viewers"
 LOG_FILE = Path(os.environ.get("CLAUDE_FILEVIEW_LOG", STATE_DIR / "events.jsonl"))
+CAPTURES_FILE = STATE_DIR / "captures.json"      # compiled from the rules file for the hook
 TRANSCRIPTS_DIR = CLAUDE_HOME / "projects"
 ENTRY_SCRIPT = CLAUDE_HOME / "fileview" / "bin" / "fileview"
 SUPERVISOR_SOCKET = STATE_DIR / "supervisor.sock"

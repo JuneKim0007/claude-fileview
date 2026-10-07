@@ -1,4 +1,4 @@
 """Entry point for `python3 -m fileview`."""
-from fileview.cli import main
+from fileview.app.cli import main
 
 raise SystemExit(main())

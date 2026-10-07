@@ -7,7 +7,7 @@ from fileview.control.actions import ActionRegistry
 SIGNAL_FOR_ACTION = {
     "reload": signal.SIGHUP,      # re-read the rules file (nginx, sshd and most daemons use HUP this way)
     "restart": signal.SIGUSR1,    # re-exec the viewer process in place
-    "redraw": signal.SIGWINCH,    # the terminal sends this itself on resize
+    "resize": signal.SIGWINCH,    # the terminal sends this itself, many times per drag
 }
 
 

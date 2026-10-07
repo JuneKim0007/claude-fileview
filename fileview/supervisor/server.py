@@ -1,6 +1,7 @@
 """The supervisor process: single instance, a Unix socket for requests and viewer links, a reconcile
-thread. Stays up until `fileview supervisor stop` or `fileview kill`. When it exits, every viewer's
-link closes and the viewers exit with it (fail-closed)."""
+thread. Stays up until `fileview supervisor stop` or `fileview kill`, which end every viewer with it
+(fail-closed), or until a "handover" request (a newer supervisor is taking over), which tells each
+viewer to keep its window and reattach instead."""
 import logging
 import os
 import signal
@@ -9,15 +10,16 @@ import socketserver
 import threading
 import time
 
-from fileview.lifecycle import control, registry
+from fileview.lifecycle import registry, windows
 from fileview.locations import SUPERVISOR_SOCKET
 from fileview.supervisor import handlers, protocol, reconcile
+from fileview.supervisor.captures_sync import CapturesSync
 from fileview.supervisor.session_table import SessionTable
 from fileview.supervisor.singleton import Singleton
 from fileview.supervisor.state import SupervisorState
 
 log = logging.getLogger("fileview.supervisor")
-VERSIONLESS_OPS = ("ping", "shutdown")     # any client may ask whether it is up, or ask it to stop
+VERSIONLESS_OPS = ("ping", "shutdown", "handover")   # what a client with other code may still ask
 
 
 class _Server(socketserver.ThreadingUnixStreamServer):
@@ -76,19 +78,32 @@ def serve() -> int:
     log.info("supervisor %s up (pid %s)", state.version, os.getpid())
     for action in reconcile.startup(state):
         log.info("startup: %s", action)
-    threading.Thread(target=_reconcile_loop, args=(state,), daemon=True).start()
+    captures = CapturesSync()
+    _refresh_captures(captures)
+    threading.Thread(target=_reconcile_loop, args=(state, captures), daemon=True).start()
     try:
         server.serve_forever(poll_interval=0.5)
     finally:
         state.stopping.set()
         server.server_close()
         SUPERVISOR_SOCKET.unlink(missing_ok=True)
+        handing_over = state.handing_over.is_set()
         for connection in list(state.attached.values()):
-            _end_link(connection)              # viewers see their link close and exit
-        _wait_for_viewers_to_exit()            # a window only reads as idle once its viewer is gone
-        control.close_windows(control.TITLE_PREFIX)
-        log.info("supervisor down")
+            if handing_over:
+                _send_handover(connection)     # viewers keep their windows and reattach
+            _end_link(connection)              # otherwise viewers see the link close and exit
+        if not handing_over:
+            _wait_for_viewers_to_exit()        # a window only reads as idle once its viewer is gone
+            windows.close_idle(windows.TITLE_PREFIX)
+        log.info("supervisor %s", "handed over" if handing_over else "down")
     return 0
+
+
+def _send_handover(connection: socket.socket) -> None:
+    try:
+        connection.sendall(protocol.encode({"op": "handover"}))
+    except OSError:
+        pass
 
 
 def _end_link(connection: socket.socket) -> None:
@@ -107,10 +122,20 @@ def _wait_for_viewers_to_exit(seconds: float = 3.0) -> None:
         time.sleep(0.1)
 
 
-def _reconcile_loop(state: SupervisorState) -> None:
+def _reconcile_loop(state: SupervisorState, captures: CapturesSync) -> None:
     while not state.stopping.wait(reconcile.INTERVAL_SECONDS):
         try:
             for action in reconcile.reconcile(state):
                 log.info("reconcile: %s", action)
         except Exception:                      # noqa: BLE001 - one bad pass must not end supervision
             log.exception("reconcile failed")
+        _refresh_captures(captures)
+
+
+def _refresh_captures(captures: CapturesSync) -> None:
+    try:
+        note = captures.refresh()
+        if note:
+            log.info(note)
+    except Exception:                          # noqa: BLE001 - capture sync must not end supervision
+        log.exception("captures sync failed")

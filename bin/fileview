@@ -10,6 +10,6 @@ if sys.argv[1:2] == ["hook"]:
     from fileview.capture.hook_entry import run  # noqa: E402
     raise SystemExit(run())
 
-from fileview.cli import main  # noqa: E402
+from fileview.app.cli import main  # noqa: E402
 
 raise SystemExit(main())

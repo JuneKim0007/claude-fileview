@@ -1,5 +1,5 @@
 """Named actions a running viewer can perform, and the queue triggers feed. Triggers (signal handlers,
-the config watcher, later an MCP or command channel) only enqueue names; the viewer loop drains the
+the rules-file watch, later an MCP or command channel) only enqueue names; the viewer loop drains the
 queue between lines, so actions never run inside a signal handler."""
 from collections import deque
 from typing import Callable, Generic, TypeVar

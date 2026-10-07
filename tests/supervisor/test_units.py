@@ -63,7 +63,7 @@ class Reconcile(unittest.TestCase):
             mock.patch("fileview.supervisor.reconcile.process_group.terminate",
                        side_effect=lambda group: self.terminated.append(group) or True),
             mock.patch("fileview.supervisor.reconcile.registry.forget"),
-            mock.patch("fileview.supervisor.reconcile.control.close_viewer", return_value="closed"),
+            mock.patch("fileview.supervisor.reconcile.viewers.close_viewer", return_value="closed"),
         ]
         for patch in patches:
             patch.start()

@@ -1,11 +1,11 @@
-"""Built-in rules: the source default.yaml is generated from, and the last resort when no config
-file can be read. Longest prefix wins; the session's project root beats every prefix."""
-from fileview.rules.model import PaletteSpec, PatternSet, Prefix, Rules
+"""Built-in rules: the source default.yaml is generated from, and the last resort when no config file
+can be read. The git push captures and banners double as a worked example of capture + announce."""
+from fileview.rules.model import CaptureRule, Match, PaletteSpec, PatternSet, Prefix, Rules, TextRule
 
 DEFAULT_RULES = Rules(
     palette=PaletteSpec(
-        kinds={"READ": "green", "WRITE": "blue", "CREATE": "yellow", "DELETE": "red",
-               "INVOKE": "orange", "SEARCH": "cyan", "LOAD": "grey"},
+        kinds={"READ": "green", "WRITE": "blue", "CREATE": "yellow", "DELETE": "red", "INVOKE": "orange",
+               "DONE": "grey", "FAILED": "red", "SEARCH": "cyan", "LOAD": "grey"},
         label="magenta",
         colours={},
     ),
@@ -26,4 +26,18 @@ DEFAULT_RULES = Rules(
     ignore=PatternSet(),
     deignore=PatternSet(),
     colour=(),
+    captures=(
+        # "   1a2b3c4..5d6e7f8  main -> main"  (git reports pushes on stderr)
+        CaptureRule("push", r"(^|[;&|]\s*)git push\b",
+                    r"(?P<old>[0-9a-f]{7,40})\.\.(?P<new>[0-9a-f]{7,40})\s+(?P<branch>\S+)\s+->"),
+        # " * [new branch]      feature -> feature"
+        CaptureRule("pushnew", r"(^|[;&|]\s*)git push\b", r"\*\s+\[new branch\]\s+(?P<branch>\S+)\s+->"),
+    ),
+    announce=(
+        TextRule(Match(kinds=("DONE",), command=r"\bgit push\b"),
+                 "<yellow>git pushed</> {push.branch}  {push.old}..{push.new}"),
+        TextRule(Match(kinds=("DONE",), command=r"\bgit push\b"), "<yellow>git pushed new branch</> {pushnew.branch}"),
+        TextRule(Match(kinds=("FAILED",), command=r"\bgit push\b"), "<red>git push failed</>"),
+    ),
+    display=(),
 )

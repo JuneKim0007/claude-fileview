@@ -4,7 +4,7 @@ import os
 import threading
 import time
 
-from fileview.lifecycle import control, registry
+from fileview.lifecycle import registry, viewers
 from fileview.supervisor import protocol
 from fileview.supervisor.session_table import Session
 from fileview.supervisor.state import SupervisorState
@@ -19,6 +19,10 @@ def dispatch(state: SupervisorState, message: dict, shutdown) -> dict:
     if op == "shutdown":
         threading.Thread(target=shutdown, daemon=True).start()
         return protocol.ok(message="supervisor stopping")
+    if op == "handover":
+        state.handing_over.set()
+        threading.Thread(target=shutdown, daemon=True).start()
+        return protocol.ok(message="supervisor handing over")
     if not session:
         return protocol.error("missing_session")
     with state.lock:
@@ -27,16 +31,16 @@ def dispatch(state: SupervisorState, message: dict, shutdown) -> dict:
         if op == "close":
             state.table.unwant(session)
             entry = state.table.get(session)
-            return protocol.ok(message=control.close_viewer(session, entry.env if entry else None))
+            return protocol.ok(message=viewers.close_viewer(session, entry.env if entry else None))
         if op == "reload":
-            return protocol.ok(message=control.signal_viewer(session, "reload"))
+            return protocol.ok(message=viewers.signal_viewer(session, "reload"))
         if op == "restart":
             if message.get("config"):                       # a new rules file needs a fresh window
                 entry = state.table.get(session)
-                control.close_viewer(session, entry.env if entry else None)
+                viewers.close_viewer(session, entry.env if entry else None)
                 return protocol.ok(message=_open(state, session, message))
             if registry.live_pid(session):
-                return protocol.ok(message=control.signal_viewer(session, "restart"))
+                return protocol.ok(message=viewers.signal_viewer(session, "restart"))
             return protocol.ok(message=_open(state, session, message))
         if op == "status":
             entry = state.table.get(session)
@@ -56,7 +60,7 @@ def _open(state: SupervisorState, session: str, message: dict) -> str:
     )
     state.table.put(entry)
     state.mark_launching(session)
-    return control.open_viewer(session, entry.config, entry.env)
+    return viewers.open_viewer(session, entry.config, entry.env)
 
 
 def _listing(state: SupervisorState) -> list[dict]:

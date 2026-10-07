@@ -11,12 +11,23 @@ from pathlib import Path
 ENTRY = str(Path(__file__).resolve().parents[2] / "bin" / "fileview")
 ATTACH = """
 import sys, time
-from fileview.supervisor.link import SupervisorLink
+from fileview.supervisor.link import CLOSED, HANDOVER, SupervisorLink
 link = SupervisorLink.attach(sys.argv[1])
 print("attached", flush=True)
-while link.alive():
+while True:
+    state = link.state()
+    if state == CLOSED:
+        print("link closed", flush=True)
+        break
+    if state == HANDOVER:
+        print("handover", flush=True)
+        link = SupervisorLink.reattach(sys.argv[1], 5)
+        print("reattached", flush=True)
     time.sleep(0.05)
-print("link closed", flush=True)
+"""
+HANDOVER = """
+from fileview.supervisor.client import request
+print(request({"op": "handover", "version": "any"}, 5))
 """
 
 
@@ -64,6 +75,19 @@ class RealSupervisor(unittest.TestCase):
         os.kill(pid, 9)                                       # a crash, not a polite stop
         self.assertEqual(viewer.stdout.readline().strip(), "link closed")
         viewer.wait(timeout=5)
+
+    def test_handover_keeps_the_viewer_which_reattaches_to_the_next_supervisor(self):
+        self.fileview("list")
+        viewer = self.attach("s1")
+        self.assertEqual(viewer.stdout.readline().strip(), "attached")
+        old = int(Path(self.tmp.name, "supervisor.lock").read_text())
+        subprocess.run([sys.executable, "-E", "-s", "-c", HANDOVER], env=self.env, cwd=str(Path(ENTRY).parents[1]),
+                       capture_output=True, timeout=10)
+        self.assertEqual(viewer.stdout.readline().strip(), "handover")
+        self.assertEqual(self.fileview("list").returncode, 0)  # the next client starts the new supervisor
+        self.assertEqual(viewer.stdout.readline().strip(), "reattached")
+        self.assertIsNone(viewer.poll())                      # same process: it never exited
+        self.assertNotEqual(int(Path(self.tmp.name, "supervisor.lock").read_text()), old)
 
     def test_kill_works_without_a_responsive_supervisor_and_clears_everything(self):
         self.fileview("list")

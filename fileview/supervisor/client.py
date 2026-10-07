@@ -39,20 +39,21 @@ def request(message: dict, timeout: float) -> dict:
         connection.settimeout(timeout)
         connection.connect(str(SUPERVISOR_SOCKET))
         connection.sendall(protocol.encode(message))
-        return protocol.decode(connection.makefile("rb").readline())
+        line = connection.makefile("rb").readline()
+    if not line:                     # accepted, then closed unanswered: that supervisor is going away
+        raise ConnectionError("supervisor closed the connection without answering")
+    return protocol.decode(line)
 
 
 def _start_and_wait() -> None:
-    if holder_pid() is None:
-        SUPERVISOR_LOG.parent.mkdir(parents=True, exist_ok=True)
-        with open(SUPERVISOR_LOG, "a") as log:
-            subprocess.Popen(
-                [sys.executable, "-E", "-s", str(ENTRY_SCRIPT), "supervisor", "run"],
-                stdin=subprocess.DEVNULL, stdout=log, stderr=log, cwd=HOME,
-                start_new_session=True,       # its own session: survives the Claude session that started it
-            )
+    """Start a supervisor once the lock is free (a previous one may still be finishing its exit), then
+    wait until it answers. Several clients may race here; the lock lets exactly one of their spawns run."""
+    started = False
     deadline = time.time() + READY_SECONDS
     while time.time() < deadline:
+        if not started and holder_pid() is None:
+            _spawn()
+            started = True
         try:
             if request({"op": "ping", "version": protocol.code_version()}, 1).get("ok"):
                 return
@@ -62,11 +63,29 @@ def _start_and_wait() -> None:
     raise SupervisorUnavailable(f"supervisor did not start within {READY_SECONDS}s; see {SUPERVISOR_LOG}")
 
 
+def _spawn() -> None:
+    SUPERVISOR_LOG.parent.mkdir(parents=True, exist_ok=True)
+    with open(SUPERVISOR_LOG, "a") as log:
+        subprocess.Popen(
+            [sys.executable, "-E", "-s", str(ENTRY_SCRIPT), "supervisor", "run"],
+            stdin=subprocess.DEVNULL, stdout=log, stderr=log, cwd=HOME,
+            start_new_session=True,           # its own session: survives the Claude session that started it
+        )
+
+
 def _replace() -> None:
-    """The running supervisor has older code: stop it (its viewers exit with it) and start ours.
-    The new one reopens the viewers its sessions still want."""
-    from fileview.lifecycle.control import stop_supervisor
-    stop_supervisor()
+    """The running supervisor has other code: ask it to hand over (its viewers keep their windows and
+    reattach to ours), then start ours. A supervisor too old to hand over is stopped instead."""
+    from fileview.supervisor.stopper import stop_supervisor
+    try:
+        handed_over = request({"op": "handover", "version": "any"}, 5).get("ok", False)
+    except (OSError, ValueError):
+        handed_over = False
+    deadline = time.time() + READY_SECONDS
+    while handed_over and holder_pid() is not None and time.time() < deadline:
+        time.sleep(0.05)
+    if holder_pid() is not None:
+        stop_supervisor()
     if holder_pid() is not None:
         raise SupervisorUnavailable("old supervisor did not stop; run: fileview kill")
     _start_and_wait()

@@ -26,5 +26,5 @@ class HookContext:
             ts=time.time(),
         )
 
-    def event(self, kind: Kind, path: str = "", detail: str = "") -> Event:
-        return Event(self.ts, self.session, self.agent, kind, path, detail, self.root)
+    def event(self, kind: Kind, path: str = "", detail: str = "", values: dict | None = None) -> Event:
+        return Event(self.ts, self.session, self.agent, kind, path, detail, self.root, values or {})

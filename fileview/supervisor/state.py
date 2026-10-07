@@ -19,6 +19,7 @@ class SupervisorState:
     started: float = field(default_factory=time.time)
     version: str = field(default_factory=code_version)
     stopping: threading.Event = field(default_factory=threading.Event)
+    handing_over: threading.Event = field(default_factory=threading.Event)   # set: exit keeps viewers
 
     def attach(self, session: str, connection: socket.socket) -> None:
         with self.lock:

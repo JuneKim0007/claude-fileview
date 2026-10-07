@@ -52,11 +52,11 @@ def main(argv: list[str] | None = None) -> int:
             os.environ["CLAUDE_FILEVIEW_STATE"] = args.state
         return _view(args.session, args.config)
     if args.command == "config":
-        from fileview import config_cli
+        from fileview.app import config_cli
         return config_cli.run(args)
     if args.command == "kill":
-        from fileview.lifecycle import control
-        print(control.kill_all())
+        from fileview.app.kill import kill_all
+        print(kill_all())
         return 0
     if args.command == "supervisor":
         return _supervisor(args.supervisor_command)
@@ -103,7 +103,7 @@ def _supervisor(command: str) -> int:
         from fileview.supervisor.server import serve
         return serve()
     if command == "stop":
-        from fileview.lifecycle.control import stop_supervisor
+        from fileview.supervisor.stopper import stop_supervisor
         print(f"fileview: supervisor {stop_supervisor()}")
         return 0
     from fileview.supervisor.client import SupervisorUnavailable, call
@@ -147,11 +147,11 @@ def _record_hook_failure(command: str, failure: Exception) -> None:
 
 
 def _view(session: str, config: str | None) -> int:
-    from fileview import viewer_app
+    from fileview.app import viewer
     from fileview.lifecycle import registry
     registry.record(session)
     try:
-        return viewer_app.run(session, config)
+        return viewer.run(session, config)
     except KeyboardInterrupt:
         return 0
     finally:
