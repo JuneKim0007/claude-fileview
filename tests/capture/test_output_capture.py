@@ -3,11 +3,14 @@ import re
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from fileview.capture.compiled_captures import CompiledCapture, load
 from fileview.capture.hook_entry import events_for
 from fileview.capture.output_capture import SCAN_CHARS, capture_values, output_text
+from fileview.config.captures_export import export
 from fileview.model.kind import Kind
+from fileview.rules.model import CaptureRule
 
 PUSH = CompiledCapture("push", re.compile(r"git push (?P<remote>\S+)"),
                        re.compile(r"(?P<old>[0-9a-f]{7})\.\.(?P<new>[0-9a-f]{7})\s+(?P<branch>\S+)\s+->"))
@@ -44,6 +47,55 @@ class CapturesFile(unittest.TestCase):
             self.assertEqual(load(path), [])
             path.write_text(json.dumps({"schemaVersion": 1, "captures": [{"name": "n", "command": "(", "output": ""}]}))
             self.assertEqual(load(path), [])                  # a bad regex disables capture, never the hook
+
+    def test_valid_json_of_the_wrong_shape_means_no_captures(self):
+        shapes = [
+            [], "text", 1, None,
+            {"schemaVersion": 1, "captures": "push"},
+            {"schemaVersion": 1, "captures": ["push"]},
+            {"schemaVersion": 1, "captures": [{"name": 1, "command": "git"}]},
+            {"schemaVersion": 1, "captures": [{"name": "n", "command": ["git"]}]},
+            {"schemaVersion": 1, "captures": [{"name": "n", "command": "git", "output": 7}]},
+            {"schemaVersion": 1},
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "captures.json"
+            for shape in shapes:
+                with self.subTest(shape=shape):
+                    path.write_text(json.dumps(shape))
+                    self.assertEqual(load(path), [])
+
+    def test_a_well_formed_file_compiles(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "captures.json"
+            path.write_text(json.dumps({"schemaVersion": 1, "captures": [
+                {"name": "push", "command": r"git push (?P<remote>\S+)", "output": r"(?P<branch>\S+) ->"},
+                {"name": "status", "command": "git status"},
+            ]}))
+            captures = load(path)
+            self.assertEqual([c.name for c in captures], ["push", "status"])
+            self.assertIsNotNone(captures[0].output)
+            self.assertIsNone(captures[1].output)
+
+    def test_what_export_writes_load_reads(self):
+        rules = (CaptureRule("push", r"git push (?P<remote>\S+)", r"(?P<branch>\S+) ->"),
+                 CaptureRule("status", "git status"))
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "captures.json"
+            export(rules, path)
+            self.assertEqual([(c.name, c.command.pattern, c.output.pattern if c.output else None) for c in load(path)],
+                             [("push", r"git push (?P<remote>\S+)", r"(?P<branch>\S+) ->"), ("status", "git status", None)])
+            path.write_text(json.dumps({"schemaVersion": 1, "captures": [{"name": "n", "command": "git", "output": None}]}))
+            self.assertEqual([c.output for c in load(path)], [None])
+
+    def test_a_wrong_shape_never_costs_the_hook_its_events(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "captures.json"
+            path.write_text(json.dumps([]))
+            with mock.patch("fileview.capture.hook_entry.load_captures", lambda: load(path)):
+                events = events_for({"hook_event_name": "PostToolUse", "tool_name": "Bash", "session_id": "s",
+                                     "cwd": tmp, "tool_input": {"command": "true"}, "tool_response": {}})
+            self.assertEqual([e.kind for e in events], [Kind.DONE])
 
 
 class HookEvents(unittest.TestCase):

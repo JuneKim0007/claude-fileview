@@ -1,4 +1,5 @@
-"""Terminal width now. Resizes arrive as the "redraw" action (SIGWINCH, see control/signals.py)."""
+"""Terminal width now. Resizes arrive as the "resize" action (SIGWINCH, see control/signals.py), debounced
+by control/debounce.py."""
 import shutil
 
 FALLBACK_COLUMNS = 100
