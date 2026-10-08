@@ -41,7 +41,7 @@ class _Connection(socketserver.StreamRequestHandler):
             self.wfile.write(protocol.encode(protocol.error("version_mismatch", supervisor=state.version)))
             return
         if message["op"] == "attach":
-            self._hold_link(state, (message.get("session") or "")[:8])
+            self._hold_link(state, protocol.session_key(message.get("session")))
             return
         response = handlers.dispatch(state, message, self.server.shutdown)
         log.info("%s %s -> %s", message.get("op"), message.get("session", ""), response.get("message", response))

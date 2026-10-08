@@ -11,7 +11,7 @@ from fileview.supervisor.state import SupervisorState
 
 
 def dispatch(state: SupervisorState, message: dict, shutdown) -> dict:
-    op, session = message.get("op"), (message.get("session") or "")[:8]
+    op, session = message.get("op"), protocol.session_key(message.get("session"))
     if op == "ping":
         return protocol.ok(pid=os.getpid(), version=state.version, uptime=round(time.time() - state.started))
     if op == "list":

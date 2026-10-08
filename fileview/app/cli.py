@@ -63,7 +63,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "list":
         return _call("list", render=_render_list)
 
-    session = (args.session or os.environ.get("CLAUDE_CODE_SESSION_ID", ""))[:8]
+    from fileview.supervisor.protocol import session_key
+    session = session_key(args.session or os.environ.get("CLAUDE_CODE_SESSION_ID", ""))
     if not session:
         print("fileview: no session id (outside Claude, pass one: fileview open <session>)", file=sys.stderr)
         return 1
@@ -123,14 +124,15 @@ def _session_hook(command: str) -> int:
         if not session_id:
             return 0
         from fileview.supervisor.client import call
+        from fileview.supervisor.protocol import session_key
         if command == "hook-end":
-            call("close", session=session_id[:8], start=False)
+            call("close", session=session_key(session_id), start=False)
             return 0
         from fileview.lifecycle.interactive import is_interactive
         from fileview.lifecycle.launchers.detect import terminal_hints
         if os.environ.get("CLAUDE_FILEVIEW_NO_VIEWER") or not is_interactive():
             return 0
-        call("ensure", session=session_id[:8], env=terminal_hints(), claude_pid=int(os.environ.get("CLAUDE_PID") or 0))
+        call("ensure", session=session_key(session_id), env=terminal_hints(), claude_pid=int(os.environ.get("CLAUDE_PID") or 0))
     except Exception as failure:   # noqa: BLE001 - a session hook must never disturb the session
         _record_hook_failure(command, failure)
     return 0

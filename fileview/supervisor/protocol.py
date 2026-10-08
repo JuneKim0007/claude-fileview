@@ -7,6 +7,12 @@ from functools import lru_cache
 from pathlib import Path
 
 PACKAGE_DIR = Path(__file__).resolve().parent.parent
+SESSION_KEY_LENGTH = 8
+
+
+def session_key(session_id: str | None) -> str:
+    """The prefix of a Claude Code session id that names its viewer in records, the table and messages."""
+    return (session_id or "")[:SESSION_KEY_LENGTH]
 
 
 @lru_cache(maxsize=1)
