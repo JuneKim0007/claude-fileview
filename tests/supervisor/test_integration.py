@@ -1,6 +1,8 @@
 """A real supervisor process in a throwaway state directory. Terminal variables are removed, so no
 window is ever opened; viewers are stood in for by a process holding a link."""
+import json
 import os
+import socket
 import subprocess
 import sys
 import tempfile
@@ -103,6 +105,22 @@ class RealSupervisor(unittest.TestCase):
         self.assertIn("supervisor stopped", result.stdout)
         self.assertIn("supervisor down", self.fileview("supervisor", "status").stdout)
         self.assertFalse(Path(self.tmp.name, "supervisor.sock").exists())
+
+    def test_kill_clears_wanted_so_nothing_reopens(self):
+        table = Path(self.tmp.name, "supervisor-sessions.json")
+        table.write_text(json.dumps([{"session": "s1", "claude_pid": os.getpid(), "config": None, "env": {},
+                                      "wanted": True}]))
+        self.fileview("kill")
+        self.assertEqual([entry["wanted"] for entry in json.loads(table.read_text())], [False])
+
+    def test_message_without_op_gets_an_answer(self):
+        self.fileview("list")
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
+            connection.settimeout(5)
+            connection.connect(str(Path(self.tmp.name, "supervisor.sock")))
+            connection.sendall(b'{"ok": true}\n')
+            reply = connection.makefile("rb").readline()
+        self.assertEqual(json.loads(reply)["error"], "bad_message")
 
     def test_second_supervisor_refuses_to_run(self):
         self.fileview("list")

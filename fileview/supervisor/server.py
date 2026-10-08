@@ -33,7 +33,7 @@ class _Connection(socketserver.StreamRequestHandler):
     def handle(self) -> None:
         state = self.server.state
         try:
-            message = protocol.decode(self.rfile.readline())
+            message = protocol.decode_request(self.rfile.readline())
         except ValueError:
             self.wfile.write(protocol.encode(protocol.error("bad_message")))
             return

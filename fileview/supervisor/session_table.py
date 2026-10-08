@@ -52,6 +52,15 @@ class SessionTable:
                 self._sessions[session].wanted = False
                 self._save()
 
+    def unwant_all(self) -> int:
+        with self._lock:
+            wanted = [entry for entry in self._sessions.values() if entry.wanted]
+            for entry in wanted:
+                entry.wanted = False
+            if wanted:
+                self._save()
+            return len(wanted)
+
     def drop(self, session: str) -> None:
         with self._lock:
             if self._sessions.pop(session, None) is not None:

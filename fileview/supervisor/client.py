@@ -42,7 +42,7 @@ def request(message: dict, timeout: float) -> dict:
         line = connection.makefile("rb").readline()
     if not line:                     # accepted, then closed unanswered: that supervisor is going away
         raise ConnectionError("supervisor closed the connection without answering")
-    return protocol.decode(line)
+    return protocol.decode_response(line)
 
 
 def _start_and_wait() -> None:

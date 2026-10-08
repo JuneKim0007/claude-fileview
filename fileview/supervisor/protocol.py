@@ -22,10 +22,20 @@ def encode(message: dict) -> bytes:
     return (json.dumps(message, separators=(",", ":")) + "\n").encode()
 
 
-def decode(line: bytes) -> dict:
+def decode_request(line: bytes) -> dict:
+    """A request ({"op": ...}): what the supervisor reads, and what it pushes down a viewer link."""
+    return _decode(line, "op")
+
+
+def decode_response(line: bytes) -> dict:
+    """A response ({"ok": ...}): what a client or an attaching viewer reads back."""
+    return _decode(line, "ok")
+
+
+def _decode(line: bytes, required: str) -> dict:
     message = json.loads(line)
-    if not isinstance(message, dict) or "op" not in message and "ok" not in message:
-        raise ValueError("not a protocol message")
+    if not isinstance(message, dict) or required not in message:
+        raise ValueError(f"not a protocol message: no {required!r}")
     return message
 
 

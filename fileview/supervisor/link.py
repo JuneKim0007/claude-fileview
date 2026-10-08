@@ -31,7 +31,7 @@ class SupervisorLink:
             connection.connect(str(SUPERVISOR_SOCKET))
             connection.sendall(protocol.encode({"op": "attach", "session": session, "pid": os.getpid(),
                                                 "version": protocol.code_version()}))
-            reply = protocol.decode(connection.makefile("rb").readline())
+            reply = protocol.decode_response(connection.makefile("rb").readline())
         except (OSError, ValueError) as failure:
             connection.close()
             raise SupervisorUnavailable(f"cannot reach the supervisor: {failure}") from None
@@ -73,7 +73,7 @@ class SupervisorLink:
             *lines, self._buffer = self._buffer.split(b"\n")
             for line in lines:
                 try:
-                    if protocol.decode(line).get("op") == "handover":
+                    if protocol.decode_request(line)["op"] == "handover":
                         self._handover = True
                 except ValueError:
                     pass

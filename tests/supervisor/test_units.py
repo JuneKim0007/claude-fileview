@@ -12,14 +12,23 @@ from fileview.supervisor.state import SupervisorState
 
 class Protocol(unittest.TestCase):
     def test_round_trip_and_version_is_stable(self):
-        message = {"op": "ensure", "session": "abc", "version": protocol.code_version()}
-        self.assertEqual(protocol.decode(protocol.encode(message)), message)
+        request = {"op": "ensure", "session": "abc", "version": protocol.code_version()}
+        self.assertEqual(protocol.decode_request(protocol.encode(request)), request)
+        response = protocol.ok(message="done")
+        self.assertEqual(protocol.decode_response(protocol.encode(response)), response)
         self.assertEqual(protocol.code_version(), protocol.code_version())
 
     def test_rejects_non_messages(self):
-        for line in (b"[1, 2]\n", b'{"x": 1}\n', b"nope\n"):
-            with self.assertRaises(ValueError):
-                protocol.decode(line)
+        for line in (b"[1, 2]\n", b'{"x": 1}\n', b"nope\n", b""):
+            for decode in (protocol.decode_request, protocol.decode_response):
+                with self.assertRaises(ValueError):
+                    decode(line)
+
+    def test_a_response_is_not_a_request_and_back(self):
+        with self.assertRaises(ValueError):
+            protocol.decode_request(b'{"ok": true}\n')
+        with self.assertRaises(ValueError):
+            protocol.decode_response(b'{"op": "ping"}\n')
 
 
 class Singletons(unittest.TestCase):
