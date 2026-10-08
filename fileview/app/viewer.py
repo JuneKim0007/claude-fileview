@@ -14,7 +14,7 @@ from fileview.control.debounce import Debounce
 from fileview.control.file_watch import FileWatcher
 from fileview.locations import LOG_FILE
 from fileview.model.event import Event
-from fileview.render.header import header, title_banner
+from fileview.render.header import HeaderStatus, header, title_banner
 from fileview.render.line import format_event
 from fileview.render.palette import Palette
 from fileview.render.width import columns
@@ -55,10 +55,9 @@ class Viewer:
         os.execv(sys.executable, [sys.executable, *sys.orig_argv[1:]])
 
     def redraw(self) -> None:
-        problems = [str(problem) for problem in self.loaded.problems]
+        status = HeaderStatus(self.loaded.source, [str(p) for p in self.loaded.problems], self.loaded.notes)
         self.banner_width = columns()
-        _emit(header(self.title, self.session, self.banner_width, self.palette, self.loaded.source,
-                     problems, self.loaded.notes))
+        _emit(header(self.title, self.session, self.banner_width, self.palette, status))
 
     def resize(self) -> None:
         self.resized.poke()                         # many per drag; settle() acts once it stops
