@@ -1,7 +1,8 @@
 """Whether the Claude session behind this process is interactive. SDK, background and `claude -p`
 sessions get no viewer window."""
 import os
-import subprocess
+
+from fileview.lifecycle import processes
 
 
 def is_interactive() -> bool:
@@ -10,11 +11,7 @@ def is_interactive() -> bool:
     claude_pid = os.environ.get("CLAUDE_PID")
     if not claude_pid:
         return True
-    args = _ps(claude_pid, "args=").split()
+    args = processes.args_of(claude_pid).split()
     if "-p" in args or "--print" in args:
         return False
-    return _ps(claude_pid, "tty=") not in ("", "??")
-
-
-def _ps(pid: str, field: str) -> str:
-    return subprocess.run(["ps", "-o", field, "-p", pid], capture_output=True, text=True).stdout.strip()
+    return processes.tty_of(claude_pid) not in ("", "??")

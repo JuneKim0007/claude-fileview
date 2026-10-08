@@ -1,10 +1,18 @@
-"""Read-only questions about running processes, answered by ps: one process's command line, the
-command lines in a process group, every (group, command line) on the machine."""
+"""Read-only questions about running processes, answered by ps: one process's command line or
+terminal, the command lines in a process group, every (group, command line) on the machine."""
 import subprocess
 
 
-def args_of(pid: int) -> str:
-    lines = _ps("-o", "args=", "-p", str(pid))
+def args_of(pid: int | str) -> str:
+    return _field_of(pid, "args=")
+
+
+def tty_of(pid: int | str) -> str:
+    return _field_of(pid, "tty=")
+
+
+def _field_of(pid: int | str, field: str) -> str:
+    lines = _ps("-o", field, "-p", str(pid))
     return lines[0].strip() if lines else ""
 
 
