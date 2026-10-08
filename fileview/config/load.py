@@ -39,41 +39,47 @@ def load_rules(explicit: str | None = None, confirm: Confirm | None = None,
         problem = ConfigError("missing_dependency", "PyYAML", detail=f"{failure}; install pyyaml for this python")
         return LoadedRules(DEFAULT_RULES, "built-in defaults", [problem])
 
-    result = LoadedRules(DEFAULT_RULES, "built-in defaults")
-    choice = lookup.choose(explicit, user_config)
-    if not choice.path.is_file() and choice.generated_when_missing:
-        config_file.write(choice.path, _default_rules(config_file, default_config, result, confirm)[0])
-        result.notes.append(f"generated {choice.path} from the defaults")
-    rules = _read_or_repair(config_file, choice.path, choice.origin, result, confirm)
-    if rules is not None:
-        result.rules, result.source = rules, str(choice.path)
-        return result
-    result.rules, result.source = _default_rules(config_file, default_config, result, confirm)
-    return result
+    return _Loader(config_file, confirm, default_config).load(lookup.choose(explicit, user_config))
 
 
-def _read_or_repair(config_file, path: Path, origin: str, result: LoadedRules, confirm: Confirm | None) -> Rules | None:
-    try:
-        return config_file.read(path)
-    except ConfigError as problem:
-        result.problems.append(problem)
-        if problem.code == "missing_file":
-            result.notes.append(f"{origin} file {path} not found; using the default file")
+class _Loader:
+    """One load: the file module, the confirm port and the default file stay fixed; result fills in."""
+
+    def __init__(self, config_file, confirm: Confirm | None, default_config: Path) -> None:
+        self.files, self.confirm, self.default_config = config_file, confirm, default_config
+        self.result = LoadedRules(DEFAULT_RULES, "built-in defaults")
+
+    def load(self, choice) -> LoadedRules:
+        if not choice.path.is_file() and choice.generated_when_missing:
+            self.files.write(choice.path, self._default_rules()[0])
+            self.result.notes.append(f"generated {choice.path} from the defaults")
+        rules = self._read_or_repair(choice.path, choice.origin)
+        if rules is not None:
+            self.result.rules, self.result.source = rules, str(choice.path)
+        else:
+            self.result.rules, self.result.source = self._default_rules()
+        return self.result
+
+    def _read_or_repair(self, path: Path, origin: str) -> Rules | None:
+        try:
+            return self.files.read(path)
+        except ConfigError as problem:
+            self.result.problems.append(problem)
+            if problem.code == "missing_file":
+                self.result.notes.append(f"{origin} file {path} not found; using the default file")
+                return None
+        question = f"{self.result.problems[-1]}\nBack up {path} and regenerate it from the defaults?"
+        if not (self.confirm(question) if self.confirm else None):
+            self.result.notes.append(f"kept {path} unchanged; fix it, or run: fileview config init --force")
             return None
-    answer = confirm(f"{result.problems[-1]}\nBack up {path} and regenerate it from the defaults?") if confirm else None
-    if not answer:
-        result.notes.append(f"kept {path} unchanged; fix it, or run: fileview config init --force")
-        return None
-    saved = config_file.backup(path)
-    config_file.write(path, DEFAULT_RULES)
-    result.notes.append(f"backed up to {saved} and regenerated {path}")
-    return DEFAULT_RULES
+        saved = self.files.backup(path)
+        self.files.write(path, DEFAULT_RULES)
+        self.result.notes.append(f"backed up to {saved} and regenerated {path}")
+        return DEFAULT_RULES
 
-
-def _default_rules(config_file, default_config: Path, result: LoadedRules,
-                   confirm: Confirm | None) -> tuple[Rules, str]:
-    if not default_config.is_file():
-        config_file.write(default_config, DEFAULT_RULES)
-        result.notes.append(f"generated {default_config}")
-    rules = _read_or_repair(config_file, default_config, "default", result, confirm)
-    return (rules, str(default_config)) if rules is not None else (DEFAULT_RULES, "built-in defaults")
+    def _default_rules(self) -> tuple[Rules, str]:
+        if not self.default_config.is_file():
+            self.files.write(self.default_config, DEFAULT_RULES)
+            self.result.notes.append(f"generated {self.default_config}")
+        rules = self._read_or_repair(self.default_config, "default")
+        return (rules, str(self.default_config)) if rules is not None else (DEFAULT_RULES, "built-in defaults")
