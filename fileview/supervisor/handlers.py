@@ -12,39 +12,67 @@ from fileview.supervisor.state import SupervisorState
 
 def dispatch(state: SupervisorState, message: dict, shutdown) -> dict:
     op, session = message.get("op"), protocol.session_key(message.get("session"))
-    if op == "ping":
-        return protocol.ok(pid=os.getpid(), version=state.version, uptime=round(time.time() - state.started))
-    if op == "list":
-        return protocol.ok(sessions=_listing(state))
-    if op == "shutdown":
-        threading.Thread(target=shutdown, daemon=True).start()
-        return protocol.ok(message="supervisor stopping")
-    if op == "handover":
-        state.handing_over.set()
-        threading.Thread(target=shutdown, daemon=True).start()
-        return protocol.ok(message="supervisor handing over")
+    if op in SUPERVISOR_OPS:
+        return SUPERVISOR_OPS[op](state, shutdown)
     if not session:
         return protocol.error("missing_session")
+    handler = SESSION_OPS.get(op)
+    if handler is None:
+        return protocol.error("unknown_op", op=op)
     with state.lock:
-        if op in ("ensure", "open"):
-            return protocol.ok(message=_open(state, session, message))
-        if op == "close":
-            state.table.unwant(session)
-            return protocol.ok(message=viewers.close_viewer(session, state.table.env_of(session)))
-        if op == "reload":
-            return protocol.ok(message=viewers.signal_viewer(session, "reload"))
-        if op == "restart":
-            if message.get("config"):                       # a new rules file needs a fresh window
-                viewers.close_viewer(session, state.table.env_of(session))
-                return protocol.ok(message=_open(state, session, message))
-            if registry.live_pid(session):
-                return protocol.ok(message=viewers.signal_viewer(session, "restart"))
-            return protocol.ok(message=_open(state, session, message))
-        if op == "status":
-            entry = state.table.get(session)
-            return protocol.ok(session=session, open=registry.live_group(session) is not None,
-                               attached=state.is_attached(session), wanted=bool(entry and entry.wanted))
-    return protocol.error("unknown_op", op=op)
+        return handler(state, session, message)
+
+
+def _ping(state: SupervisorState, _shutdown) -> dict:
+    return protocol.ok(pid=os.getpid(), version=state.version, uptime=round(time.time() - state.started))
+
+
+def _list(state: SupervisorState, _shutdown) -> dict:
+    return protocol.ok(sessions=_listing(state))
+
+
+def _shutdown(_state: SupervisorState, shutdown) -> dict:
+    threading.Thread(target=shutdown, daemon=True).start()
+    return protocol.ok(message="supervisor stopping")
+
+
+def _handover(state: SupervisorState, shutdown) -> dict:
+    state.handing_over.set()
+    threading.Thread(target=shutdown, daemon=True).start()
+    return protocol.ok(message="supervisor handing over")
+
+
+def _ensure(state: SupervisorState, session: str, message: dict) -> dict:
+    return protocol.ok(message=_open(state, session, message))
+
+
+def _close(state: SupervisorState, session: str, _message: dict) -> dict:
+    state.table.unwant(session)
+    return protocol.ok(message=viewers.close_viewer(session, state.table.env_of(session)))
+
+
+def _reload(_state: SupervisorState, session: str, _message: dict) -> dict:
+    return protocol.ok(message=viewers.signal_viewer(session, "reload"))
+
+
+def _restart(state: SupervisorState, session: str, message: dict) -> dict:
+    if message.get("config"):                       # a new rules file needs a fresh window
+        viewers.close_viewer(session, state.table.env_of(session))
+        return protocol.ok(message=_open(state, session, message))
+    if registry.live_pid(session):
+        return protocol.ok(message=viewers.signal_viewer(session, "restart"))
+    return protocol.ok(message=_open(state, session, message))
+
+
+def _status(state: SupervisorState, session: str, _message: dict) -> dict:
+    entry = state.table.get(session)
+    return protocol.ok(session=session, open=registry.live_group(session) is not None,
+                       attached=state.is_attached(session), wanted=bool(entry and entry.wanted))
+
+
+SUPERVISOR_OPS = {"ping": _ping, "list": _list, "shutdown": _shutdown, "handover": _handover}
+SESSION_OPS = {"ensure": _ensure, "open": _ensure, "close": _close, "reload": _reload,
+               "restart": _restart, "status": _status}
 
 
 def _open(state: SupervisorState, session: str, message: dict) -> str:
