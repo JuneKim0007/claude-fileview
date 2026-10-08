@@ -1,11 +1,11 @@
 """One rules file on disk: read it into Rules (or raise ConfigError naming the file), write Rules to it
 atomically, back it up before an overwrite."""
-import os
 import shutil
 import time
 from pathlib import Path
 
 from fileview.config import rules_document, yaml_codec
+from fileview.config.atomic_write import atomic_write
 from fileview.config.errors import ConfigError
 from fileview.rules.model import Rules
 
@@ -33,10 +33,7 @@ def read(path: Path) -> Rules:
 
 
 def write(path: Path, rules: Rules) -> Path:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    partial = path.with_name(path.name + ".partial")
-    partial.write_text(HEADER + yaml_codec.dump(rules_document.of(rules)), encoding="utf-8")
-    os.replace(partial, path)
+    atomic_write(path, HEADER + yaml_codec.dump(rules_document.of(rules)))
     return path
 
 
