@@ -84,19 +84,23 @@ def serve() -> int:
     try:
         server.serve_forever(poll_interval=0.5)
     finally:
-        state.stopping.set()
-        server.server_close()
-        SUPERVISOR_SOCKET.unlink(missing_ok=True)
-        handing_over = state.handing_over.is_set()
-        for connection in state.links():
-            if handing_over:
-                _send_handover(connection)     # viewers keep their windows and reattach
-            _end_link(connection)              # otherwise viewers see the link close and exit
-        if not handing_over:
-            _wait_for_viewers_to_exit()        # a window only reads as idle once its viewer is gone
-            windows.close_idle(windows.TITLE_PREFIX)
-        log.info("supervisor %s", "handed over" if handing_over else "down")
+        _teardown(server, state)
     return 0
+
+
+def _teardown(server: _Server, state: SupervisorState) -> None:
+    state.stopping.set()
+    server.server_close()
+    SUPERVISOR_SOCKET.unlink(missing_ok=True)
+    handing_over = state.handing_over.is_set()
+    for connection in state.links():
+        if handing_over:
+            _send_handover(connection)     # viewers keep their windows and reattach
+        _end_link(connection)              # otherwise viewers see the link close and exit
+    if not handing_over:
+        _wait_for_viewers_to_exit()        # a window only reads as idle once its viewer is gone
+        windows.close_idle(windows.TITLE_PREFIX)
+    log.info("supervisor %s", "handed over" if handing_over else "down")
 
 
 def _send_handover(connection: socket.socket) -> None:
