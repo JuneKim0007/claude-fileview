@@ -150,7 +150,7 @@ def _reexec_for_new_code() -> int:
 
 def _home_short(path: str) -> str:
     home = os.path.expanduser("~")
-    return "~" + path[len(home):] if path.startswith(home) else path
+    return "~" + path[len(home):] if path == home or path.startswith(home + os.sep) else path
 
 
 def _emit(text: str) -> None:
