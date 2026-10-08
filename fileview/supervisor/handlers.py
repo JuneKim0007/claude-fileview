@@ -30,14 +30,12 @@ def dispatch(state: SupervisorState, message: dict, shutdown) -> dict:
             return protocol.ok(message=_open(state, session, message))
         if op == "close":
             state.table.unwant(session)
-            entry = state.table.get(session)
-            return protocol.ok(message=viewers.close_viewer(session, entry.env if entry else None))
+            return protocol.ok(message=viewers.close_viewer(session, state.table.env_of(session)))
         if op == "reload":
             return protocol.ok(message=viewers.signal_viewer(session, "reload"))
         if op == "restart":
             if message.get("config"):                       # a new rules file needs a fresh window
-                entry = state.table.get(session)
-                viewers.close_viewer(session, entry.env if entry else None)
+                viewers.close_viewer(session, state.table.env_of(session))
                 return protocol.ok(message=_open(state, session, message))
             if registry.live_pid(session):
                 return protocol.ok(message=viewers.signal_viewer(session, "restart"))
@@ -45,7 +43,7 @@ def dispatch(state: SupervisorState, message: dict, shutdown) -> dict:
         if op == "status":
             entry = state.table.get(session)
             return protocol.ok(session=session, open=registry.live_group(session) is not None,
-                               attached=session in state.attached, wanted=bool(entry and entry.wanted))
+                               attached=state.is_attached(session), wanted=bool(entry and entry.wanted))
     return protocol.error("unknown_op", op=op)
 
 
@@ -66,4 +64,4 @@ def _open(state: SupervisorState, session: str, message: dict) -> str:
 def _listing(state: SupervisorState) -> list[dict]:
     running = {session: group for group, session in registry.all_viewer_groups().items()}
     return [{"session": e.session, "wanted": e.wanted, "open": e.session in running,
-             "attached": e.session in state.attached, "claude_pid": e.claude_pid} for e in state.table.all()]
+             "attached": state.is_attached(e.session), "claude_pid": e.claude_pid} for e in state.table.all()]

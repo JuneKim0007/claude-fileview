@@ -6,9 +6,9 @@ import os
 import re
 
 from fileview.lifecycle import processes
-from fileview.locations import CLAUDE_HOME, ENTRY_SCRIPT, STATE_DIR, VIEWERS_DIR
+from fileview.locations import DEFAULT_STATE_DIR, ENTRY_SCRIPT, STATE_DIR, VIEWERS_DIR
 
-_DEFAULT_STATE = str(CLAUDE_HOME / "fileview-state")    # viewers started without --state belong here
+_DEFAULT_STATE = str(DEFAULT_STATE_DIR)    # viewers started without --state belong here
 
 # the bash viewer this replaced; later bash versions ran it under `exec -a "claude-fileview <sid>"`
 LEGACY_VIEWER = re.compile(r"^(?:/bin/bash|claude-fileview \S+) \S*/touched-view\.sh (\S+)$")
@@ -66,10 +66,6 @@ def all_viewer_groups() -> dict[int, str]:
         if session:
             found[group] = session
     return found
-
-
-def recorded_sessions() -> list[str]:
-    return sorted(p.stem for p in VIEWERS_DIR.glob("*.pgid")) if VIEWERS_DIR.exists() else []
 
 
 def _recorded_ids(session: str) -> list[int] | None:

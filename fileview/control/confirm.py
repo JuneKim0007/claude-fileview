@@ -12,7 +12,3 @@ def terminal_confirm(question: str) -> bool | None:
     except EOFError:
         return None
     return answer.strip().lower() in ("y", "yes")
-
-
-def never_confirm(_question: str) -> bool | None:
-    return None

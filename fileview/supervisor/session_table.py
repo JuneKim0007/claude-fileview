@@ -37,6 +37,10 @@ class SessionTable:
         with self._lock:
             return self._sessions.get(session)
 
+    def env_of(self, session: str) -> dict[str, str] | None:
+        entry = self.get(session)
+        return entry.env if entry else None
+
     def put(self, entry: Session) -> None:
         with self._lock:
             self._sessions[entry.session] = entry

@@ -35,3 +35,15 @@ class SupervisorState:
     def mark_launching(self, session: str) -> None:
         with self.lock:
             self.last_seen[session] = time.time()              # start the grace period for a new viewer
+
+    def is_attached(self, session: str) -> bool:
+        return session in self.attached
+
+    def seen(self, session: str, now: float) -> None:
+        self.last_seen[session] = now
+
+    def stale(self, session: str, now: float, grace: float) -> bool:
+        return now - self.last_seen.get(session, 0) > grace
+
+    def links(self) -> list[socket.socket]:
+        return list(self.attached.values())

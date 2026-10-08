@@ -4,7 +4,8 @@ from pathlib import Path
 
 HOME = Path.home()
 CLAUDE_HOME = HOME / ".claude"
-STATE_DIR = Path(os.environ.get("CLAUDE_FILEVIEW_STATE", CLAUDE_HOME / "fileview-state"))
+DEFAULT_STATE_DIR = CLAUDE_HOME / "fileview-state"
+STATE_DIR = Path(os.environ.get("CLAUDE_FILEVIEW_STATE", DEFAULT_STATE_DIR))
 VIEWERS_DIR = STATE_DIR / "viewers"
 LOG_FILE = Path(os.environ.get("CLAUDE_FILEVIEW_LOG", STATE_DIR / "events.jsonl"))
 CAPTURES_FILE = STATE_DIR / "captures.json"      # compiled from the rules file for the hook

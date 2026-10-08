@@ -88,7 +88,7 @@ def serve() -> int:
         server.server_close()
         SUPERVISOR_SOCKET.unlink(missing_ok=True)
         handing_over = state.handing_over.is_set()
-        for connection in list(state.attached.values()):
+        for connection in state.links():
             if handing_over:
                 _send_handover(connection)     # viewers keep their windows and reattach
             _end_link(connection)              # otherwise viewers see the link close and exit
