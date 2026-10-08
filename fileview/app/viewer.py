@@ -110,19 +110,9 @@ def run(session: str, config: str | None = None) -> int:
         viewer.settle()
         if raw is None:
             ticks += 1
-            link_state = link.state()
-            if link_state == CLOSED:                   # a failure, not a planned upgrade
-                _emit("fileview: supervisor gone; exiting")
-                return 0
-            if link_state == HANDOVER:
-                _emit(viewer.palette.dim("fileview: supervisor upgrading; reattaching"))
-                try:
-                    link = SupervisorLink.reattach(session, HANDOVER_SECONDS)
-                except ViewerOutdated:
-                    return _reexec_for_new_code()
-                except SupervisorUnavailable as failure:
-                    _emit(f"fileview: no supervisor took over ({failure}); exiting")
-                    return 0
+            link, exit_code = _stay_supervised(link, session, viewer)
+            if link is None:
+                return exit_code
             if ticks % POLL_TICKS == 0:
                 viewer.poll()
                 if viewer.watcher and viewer.watcher.changed():
@@ -132,6 +122,25 @@ def run(session: str, config: str | None = None) -> int:
         if event is not None and event.session.startswith(session):
             viewer.show(event)
     return 0
+
+
+def _stay_supervised(link: SupervisorLink, session: str, viewer: Viewer) -> tuple[SupervisorLink | None, int]:
+    """The link to keep using, or None with the exit code: a closed link is a failure (exit), a handover
+    is a planned upgrade (reattach to the successor, or re-exec when it runs newer code)."""
+    link_state = link.state()
+    if link_state == CLOSED:
+        _emit("fileview: supervisor gone; exiting")
+        return None, 0
+    if link_state != HANDOVER:
+        return link, 0
+    _emit(viewer.palette.dim("fileview: supervisor upgrading; reattaching"))
+    try:
+        return SupervisorLink.reattach(session, HANDOVER_SECONDS), 0
+    except ViewerOutdated:
+        return None, _reexec_for_new_code()
+    except SupervisorUnavailable as failure:
+        _emit(f"fileview: no supervisor took over ({failure}); exiting")
+        return None, 0
 
 
 def _reexec_for_new_code() -> int:
