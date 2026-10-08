@@ -6,7 +6,7 @@ import subprocess
 import sys
 import time
 
-from fileview.locations import ENTRY_SCRIPT, HOME, SUPERVISOR_LOG, SUPERVISOR_SOCKET
+from fileview.locations import CODE_ROOT, ENTRY_SCRIPT, HOME, SUPERVISOR_LOG, SUPERVISOR_SOCKET
 from fileview.supervisor import protocol
 from fileview.supervisor.singleton import holder_pid
 
@@ -63,6 +63,17 @@ def _start_and_wait() -> None:
     raise SupervisorUnavailable(f"supervisor did not start within {READY_SECONDS}s; see {SUPERVISOR_LOG}")
 
 
+def _refuse_other_install() -> None:
+    try:
+        root = request({"op": "ping", "version": "any"}, 2).get("root")
+    except (OSError, ValueError):
+        return                                   # not answering: nothing running to take over from
+    if root is not None and root != str(CODE_ROOT):   # no root: a supervisor from before roots were reported
+        raise SupervisorUnavailable(
+            f"the running supervisor belongs to {root}, not this copy ({CODE_ROOT}). Run this copy with its "
+            f"own CLAUDE_FILEVIEW_STATE, or stop the other first: fileview supervisor stop")
+
+
 def _spawn() -> None:
     SUPERVISOR_LOG.parent.mkdir(parents=True, exist_ok=True)
     with open(SUPERVISOR_LOG, "a") as log:
@@ -75,8 +86,10 @@ def _spawn() -> None:
 
 def _replace() -> None:
     """The running supervisor has other code: ask it to hand over (its viewers keep their windows and
-    reattach to ours), then start ours. A supervisor too old to hand over is stopped instead."""
+    reattach to ours), then start ours. A supervisor too old to hand over is stopped instead. Only an
+    upgrade of the same install may replace it: a different copy sharing this state directory is refused."""
     from fileview.supervisor.stopper import stop_supervisor
+    _refuse_other_install()
     try:
         handed_over = request({"op": "handover", "version": "any"}, 5).get("ok", False)
     except (OSError, ValueError):

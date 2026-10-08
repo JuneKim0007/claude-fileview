@@ -2,6 +2,7 @@
 window is ever opened; viewers are stood in for by a process holding a link."""
 import json
 import os
+import shutil
 import socket
 import subprocess
 import sys
@@ -121,6 +122,21 @@ class RealSupervisor(unittest.TestCase):
             connection.sendall(b'{"ok": true}\n')
             reply = connection.makefile("rb").readline()
         self.assertEqual(json.loads(reply)["error"], "bad_message")
+
+    def test_a_different_copy_cannot_take_over_the_supervisor(self):
+        self.fileview("list")
+        pid = Path(self.tmp.name, "supervisor.lock").read_text()
+        with tempfile.TemporaryDirectory() as other:
+            for part in ("bin", "fileview"):
+                shutil.copytree(Path(ENTRY).parents[1] / part, Path(other, part),
+                                ignore=shutil.ignore_patterns("__pycache__"))
+            with open(Path(other, "fileview", "__init__.py"), "a") as source:
+                source.write("\n")                    # different code version, as an edited checkout has
+            result = subprocess.run([sys.executable, "-E", "-s", str(Path(other, "bin", "fileview")), "list"],
+                                    env=self.env, capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("belongs to", result.stderr)
+        self.assertEqual(Path(self.tmp.name, "supervisor.lock").read_text(), pid)   # untouched
 
     def test_second_supervisor_refuses_to_run(self):
         self.fileview("list")

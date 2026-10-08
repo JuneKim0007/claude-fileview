@@ -5,6 +5,7 @@ import threading
 import time
 
 from fileview.lifecycle import registry, viewers
+from fileview.locations import CODE_ROOT
 from fileview.supervisor import protocol
 from fileview.supervisor.session_table import Session
 from fileview.supervisor.state import SupervisorState
@@ -24,7 +25,8 @@ def dispatch(state: SupervisorState, message: dict, shutdown) -> dict:
 
 
 def _ping(state: SupervisorState, _shutdown) -> dict:
-    return protocol.ok(pid=os.getpid(), version=state.version, uptime=round(time.time() - state.started))
+    return protocol.ok(pid=os.getpid(), version=state.version, uptime=round(time.time() - state.started),
+                       root=str(CODE_ROOT))
 
 
 def _list(state: SupervisorState, _shutdown) -> dict:
