@@ -1,9 +1,8 @@
 """Filled template parts -> terminal text that fits a width. Width is counted on visible characters
 only, so colour codes never cause early truncation."""
 from fileview.render.palette import Palette
+from fileview.render.paths import ELLIPSIS
 from fileview.rules.template import Part
-
-ELLIPSIS = "…"
 
 
 def visible_length(parts: tuple[Part, ...]) -> int:

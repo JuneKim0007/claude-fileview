@@ -2,12 +2,11 @@
 `[KIND]   [label] path  detail  <agent>` or the display template's body. Everything is fitted to the
 width here, the last layer of the pipeline."""
 from fileview.model.event import Event
-from fileview.model.kind import Kind
 from fileview.render.palette import Palette
 from fileview.render.paths import elide_middle
 from fileview.render.template_text import draw, visible_length
 from fileview.rules.model import Rules
-from fileview.rules.pipeline import plan
+from fileview.rules.pipeline import COMMAND_KINDS, plan
 from fileview.rules.template import Part
 
 TAG_WIDTH = 9                          # "[CREATE] " is the widest tag
@@ -30,7 +29,7 @@ def _line(event: Event, planned, width: int, palette: Palette) -> str:
     room = max(10, width - TAG_WIDTH - len(agent) - 1)
     if planned.body is not None:
         return tag + draw(planned.body, palette, room) + palette.dim(agent)
-    if event.kind in (Kind.INVOKE, Kind.DONE, Kind.FAILED):
+    if event.kind in COMMAND_KINDS:
         return tag + elide_middle("$ " + " ; ".join(event.detail.splitlines()), room) + palette.dim(agent)
     detail = f"  {event.detail}" if event.detail else ""
     if planned.placement is None:

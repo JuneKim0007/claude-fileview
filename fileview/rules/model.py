@@ -62,9 +62,9 @@ class PaletteSpec:
 class Rules:
     palette: PaletteSpec = field(default_factory=PaletteSpec)
     prefixes: tuple[Prefix, ...] = ()
-    ignore: PatternSet = field(default_factory=PatternSet)      # hide when matched...
-    deignore: PatternSet = field(default_factory=PatternSet)    # ...unless matched here
-    colour: tuple[ColourRule, ...] = ()                         # first match wins
+    ignore: PatternSet = field(default_factory=PatternSet)
+    deignore: PatternSet = field(default_factory=PatternSet)
+    colour: tuple[ColourRule, ...] = ()
     captures: tuple[CaptureRule, ...] = ()
-    announce: tuple[TextRule, ...] = ()                         # every match fires
-    display: tuple[TextRule, ...] = ()                          # first match wins
+    announce: tuple[TextRule, ...] = ()
+    display: tuple[TextRule, ...] = ()

@@ -9,4 +9,5 @@ class Launcher(Protocol):
         """Start argv in a new window, tab or pane titled `title`."""
 
     def close_idle_windows(self, title_fragment: str) -> None:
-        """Close windows whose title contains the fragment and that no longer run anything."""
+        """Close windows whose title contains the fragment and that no longer run anything. A terminal
+        whose panes close themselves when their process exits (iTerm2, tmux) has nothing to do here."""
