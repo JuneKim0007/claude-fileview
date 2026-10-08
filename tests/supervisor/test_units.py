@@ -31,6 +31,23 @@ class Protocol(unittest.TestCase):
             protocol.decode_response(b'{"op": "ping"}\n')
 
 
+class Answers(unittest.TestCase):
+    def test_a_failing_operation_still_gets_an_answer(self):
+        from fileview.supervisor import server
+        with mock.patch.object(server.handlers, "dispatch", side_effect=RuntimeError("boom")):
+            reply = server.answer(None, {"op": "open", "session": "s1"}, shutdown=lambda: None)
+        self.assertEqual(reply, protocol.error("internal_error", detail="RuntimeError: boom"))
+
+
+class ClientRetry(unittest.TestCase):
+    def test_a_supervisor_that_stops_answering_after_start_is_unavailable(self):
+        from fileview.supervisor import client
+        with mock.patch.object(client, "request", side_effect=ConnectionError("closed")), \
+             mock.patch.object(client, "_start_and_wait"):
+            with self.assertRaises(client.SupervisorUnavailable):
+                client.call("open", session="s1")
+
+
 class Singletons(unittest.TestCase):
     def test_second_acquire_fails_and_holder_is_reported(self):
         with tempfile.TemporaryDirectory() as tmp:

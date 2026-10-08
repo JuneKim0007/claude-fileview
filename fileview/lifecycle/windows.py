@@ -1,6 +1,7 @@
 """Viewer windows as the user sees them: the title that names them, and closing the ones whose viewer
 has exited (never one that still runs something)."""
 import os
+import subprocess
 import time
 
 from fileview.lifecycle.launchers.detect import detect_launcher
@@ -18,4 +19,7 @@ def close_idle(title_fragment: str, env: dict | None = None) -> None:
     launcher = detect_launcher(env if env is not None else os.environ)
     if launcher is not None:
         time.sleep(SETTLE_SECONDS)
-        launcher.close_idle_windows(title_fragment)
+        try:
+            launcher.close_idle_windows(title_fragment)
+        except (subprocess.TimeoutExpired, OSError):     # an unresponsive terminal keeps its windows
+            pass

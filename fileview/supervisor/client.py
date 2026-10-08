@@ -25,13 +25,21 @@ def call(op: str, timeout: float = 20, start: bool = True, **fields) -> dict:
         if not start:
             raise SupervisorUnavailable("supervisor is not running") from None
         _start_and_wait()
-        response = request(message, timeout)
+        response = _retry(message, timeout)
     if response.get("error") == "version_mismatch":
         if not start:
             raise SupervisorUnavailable(f"supervisor runs other code ({response.get('supervisor')})")
         _replace()
-        response = request(message, timeout)
+        response = _retry(message, timeout)
     return response
+
+
+def _retry(message: dict, timeout: float) -> dict:
+    """The request again, after starting or replacing the supervisor; failing now means it is unavailable."""
+    try:
+        return request(message, timeout)
+    except OSError as failure:
+        raise SupervisorUnavailable(f"supervisor stopped answering: {failure}") from None
 
 
 def request(message: dict, timeout: float) -> dict:

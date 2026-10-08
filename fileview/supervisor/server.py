@@ -43,7 +43,7 @@ class _Connection(socketserver.StreamRequestHandler):
         if message["op"] == "attach":
             self._hold_link(state, protocol.session_key(message.get("session")))
             return
-        response = handlers.dispatch(state, message, self.server.shutdown)
+        response = answer(state, message, self.server.shutdown)
         log.info("%s %s -> %s", message.get("op"), message.get("session", ""), response.get("message", response))
         self.wfile.write(protocol.encode(response))
 
@@ -55,6 +55,15 @@ class _Connection(socketserver.StreamRequestHandler):
             pass
         state.detach(session, self.connection)
         log.info("detached %s", session)
+
+
+def answer(state: SupervisorState, message: dict, shutdown) -> dict:
+    """Every request gets a reply: a failing operation becomes internal_error, never a dropped line."""
+    try:
+        return handlers.dispatch(state, message, shutdown)
+    except Exception as failure:              # noqa: BLE001 - the client must always hear back
+        log.exception("%s failed", message.get("op"))
+        return protocol.error("internal_error", detail=f"{type(failure).__name__}: {failure}")
 
 
 def serve() -> int:

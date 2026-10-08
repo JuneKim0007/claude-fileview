@@ -1,6 +1,7 @@
 """Open, close, signal and sweep viewer processes. The supervisor calls these under its lock; nothing
 else opens viewers."""
 import os
+import subprocess
 import sys
 import time
 
@@ -29,7 +30,10 @@ def open_viewer(session: str, config: str | None = None, env: dict | None = None
         launcher = detect_launcher(env if env is not None else os.environ)
         if launcher is None:
             return f"{session}: no supported terminal (TERM_PROGRAM/TMUX not recognised)"
-        launcher.launch(windows.title_for(session), viewer_argv(session, config))
+        try:
+            launcher.launch(windows.title_for(session), viewer_argv(session, config))
+        except (subprocess.TimeoutExpired, OSError):     # e.g. a terminal still busy on first launch
+            return f"{session}: {launcher.name} did not respond; nothing opened"
         for _ in range(CONFIRM_TRIES):
             if registry.live_group(session):
                 return f"{session}: opened ({launcher.name})"
